@@ -17,8 +17,8 @@ on:
   push:
     branches: [prototype]
     paths:
-      - "helm/**"
-      - "sandbox/**"
+      - "agent-deployment/agent-sandbox/helm/**"
+      - "agent-deployment/agent-sandbox/sandbox/**"
       - ".github/workflows/install-agent-sandbox.yml"
 
 permissions:
@@ -38,14 +38,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create local KinD Cluster
-        uses: engineerd/setup-kind@v0.6.0
-        with:
-          version: "v0.12.0" # Spins up a free K8s cluster inside the runner
-
-      - name: Test Cluster Access
         run: |
-          kubectl cluster-info
-          kubectl get nodes
+          # Natively triggers the pre-installed kind binary on the runner
+          kind create cluster --wait 5m
       # =================================================================
       # STAGE 2: Deploy  Sandbox Control Plane
       # =================================================================
