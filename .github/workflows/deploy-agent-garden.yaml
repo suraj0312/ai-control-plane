@@ -20,6 +20,7 @@ permissions:
 
 env:
   AGENT_GARDEN_NAMESPACE: agent-garden
+  KUBECONFIG: ${{ github.workspace }}/kubeconfig
 
 jobs:
   deploy-agent-garden:
@@ -35,9 +36,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create local KinD cluster
-       
         run: |
-           kind create cluster --wait 5m --kubeconfig "$KUBECONFIG"
+          kind create cluster --wait 5m --kubeconfig "$KUBECONFIG"
+          # Wait for API server to be ready
+          kubectl cluster-info
+          kubectl wait --for=condition=Ready node --all --timeout=300s || true
 
       # =================================================================
       # STAGE 2: Apply Manifests
