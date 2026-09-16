@@ -1,0 +1,47 @@
+# -- Name of the agent; derives the SandboxTemplate/SandboxWarmPool/SandboxClaim names. Required.
+name: "travel-agent"
+
+# -- Namespace the SandboxTemplate/SandboxWarmPool/SandboxClaim are created in.
+namespace: agent-sandbox-demo
+
+image:
+  # -- Agent container image repository, without the tag. Required.
+  repository: "docker.io/su03raj/travel-agent"
+  # -- Agent container image tag.
+  tag: v7
+  pullPolicy: IfNotPresent
+
+# -- Port the agent container listens on. Required.
+containerPort: 10003
+
+# -- Extra container env vars, in raw Kubernetes format: [{name: KEY, value: "val"}, ...]
+env: [{name: "OPENAI_API_KEY", value: "api-key"},{name: "BASE_URL", value: "http://agentgateway-proxy.agentgateway-system.svc.cluster.local:80/openai"},{name: "MODEL", value: "gpt-5.4"}]
+
+# -- Number of warm pods the SandboxWarmPool should keep ready.
+replicas: 1
+
+restartPolicy: OnFailure
+
+resources: {}
+
+# -- Whether the SandboxTemplate should also provision a Service for the agent's pod.
+service: true
+
+# -- volumeClaimTemplates passed through to the SandboxTemplate spec (same shape as a PVC template).
+volumeClaimTemplates:
+  - metadata:
+      name: workspace
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi
+
+claim:
+  # -- If true, immediately claims a sandbox from the warm pool so it's ready to use right after install
+  # (mirrors the /onboard-agent API). If false, only the SandboxTemplate + SandboxWarmPool are created
+  # (mirrors /create-agent-template + /create-sandbox-pool).
+  create: true
+  # -- Name of the SandboxClaim; defaults to .Values.name.
+  name: ""
+ 

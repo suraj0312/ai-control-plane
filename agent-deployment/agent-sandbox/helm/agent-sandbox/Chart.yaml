@@ -1,0 +1,10 @@
+apiVersion: v2
+name: agent-sandbox
+description: >-
+  Provisions a SandboxTemplate, SandboxWarmPool, and (optionally) a claimed
+  SandboxClaim for one agent, given its container image/tag and env vars.
+  One Helm release = one agent sandbox.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+ 

@@ -1,0 +1,77 @@
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: {{ include "agent-sandbox.templateName" . }}
+  namespace: {{ .Values.namespace }}
+spec:
+  service: {{ .Values.service }}
+  podTemplate:
+    spec:
+      containers:
+        - name: {{ include "agent-sandbox.name" . }}
+          image: "{{ required "image.repository is required, e.g. --set image.repository=..." .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ required "containerPort is required, e.g. --set containerPort=8080" .Values.containerPort }}
+          {{- with .Values.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      restartPolicy: {{ .Values.restartPolicy }}
+  # networkPolicyManagement: "Unmanaged"   ###### uncomment it for testing if networkpolicy error occur######
+  networkPolicy:
+    ingress:
+      # Existing rule:
+      # Only Sandbox Router can reach the sandbox.
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: agent-sandbox-system
+            podSelector:
+              matchLabels:
+                app: sandbox-router
+
+    egress:
+      # DNS
+      - ports:
+          - protocol: UDP
+            port: 53
+          - protocol: TCP
+            port: 53
+
+      # Allow Travel Agent -> Agent Gateway proxy
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: agentgateway-system
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: agentgateway-proxy
+        ports:
+          - protocol: TCP
+            port: 80
+
+      # Existing public IPv4 Internet access
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except:
+                - 10.0.0.0/8
+                - 172.16.0.0/12
+                - 192.168.0.0/16
+                - 169.254.0.0/16
+      - to:
+          - ipBlock:
+              cidr: ::/0
+              except:
+                - fc00::/7
+                - fe80::/10
+  {{- with .Values.volumeClaimTemplates }}
+  volumeClaimTemplates:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+ 

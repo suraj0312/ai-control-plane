@@ -1,0 +1,11 @@
+{{- if .Values.claim.create }}
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxClaim
+metadata:
+  name: {{ include "agent-sandbox.claimName" . }}
+  namespace: {{ .Values.namespace }}
+spec:
+  warmPoolRef:
+    name: {{ include "agent-sandbox.warmpoolName" . }}
+{{- end }}
+ 

@@ -1,0 +1,103 @@
+name: Install agent-sandbox
+
+# Spins up a local kind cluster and installs the upstream kubernetes-sigs
+# agent-sandbox controller + extensions (SandboxTemplate/SandboxWarmPool/
+# SandboxClaim CRDs), then validates this repo's Helm chart renders and
+# applies cleanly against it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          agent-sandbox release tag to install (e.g. v1.0.2). Leave empty to
+          use the latest release.
+        required: false
+        default: ""
+  push:
+    branches: [prototype]
+    paths:
+      - "helm/**"
+      - "sandbox/**"
+      - ".github/workflows/install-agent-sandbox.yml"
+
+permissions:
+  contents: read
+
+env:
+  AGENT_SANDBOX_NAMESPACE: agent-sandbox-system
+
+jobs:
+  install-agent-sandbox:
+    runs-on: ubuntu-latest
+    steps:
+      # =================================================================
+      # STAGE 1: Checkout & Cluster Access
+      # =================================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure Kubectl
+        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+      # =================================================================
+      # STAGE 2: Deploy  Sandbox Control Plane
+      # =================================================================
+      - name: Resolve agent-sandbox version
+        id: resolve-version
+        run: |
+          version="${{ github.event.inputs.version }}"
+          if [ -z "$version" ]; then
+            version="$(curl -fsSL https://api.github.com/repos/kubernetes-sigs/agent-sandbox/releases/latest | jq -r .tag_name)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install agent-sandbox (core + extensions)
+        run: |
+          kubectl apply -f "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${VERSION}/sandbox-with-extensions.yaml"
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/agent-sandbox-controller --timeout=180s
+        env:
+          VERSION: ${{ steps.resolve-version.outputs.version }}
+
+      - name: Verify installation
+        run: |
+          kubectl get crd sandboxes.agents.x-k8s.io
+          kubectl get crd sandboxtemplates.extensions.agents.x-k8s.io
+          kubectl get crd sandboxwarmpools.extensions.agents.x-k8s.io
+          kubectl get crd sandboxclaims.extensions.agents.x-k8s.io
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" get deploy agent-sandbox-controller
+
+      - name: Apply sandbox apis and router deployments
+        run: |
+          kubectl apply -f agent-deployment/agent-sandbox/sandbox/router-deployment.yaml
+          kubectl apply -f agent-deployment/agent-sandbox/sandbox/apis-deployment.yaml
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/sandbox-router-deployment --timeout=180s
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/sandbox-api --timeout=180s
+
+      # =================================================================
+      # STAGE 3: Validate Helm Chart
+      # =================================================================
+      - name: Lint and template this repo's Helm chart
+        run: |
+          helm lint agent-deployment/agent-sandbox/helm/agent-sandbox
+          helm template test-agent agent-deployment/agent-sandbox/helm/agent-sandbox --set name=test-agent --set image.repository=busybox --set image.tag=latest
+
+      # =================================================================
+      # STAGE 4: Install Chart Against Cluster
+      # =================================================================
+      - name: Install this repo's Helm chart against the cluster
+        run: |
+          kubectl create namespace agent-sandbox-demo --dry-run=client -o yaml | kubectl apply -f -
+          helm upgrade --install test-agent agent-deployment/agent-sandbox/helm/agent-sandbox
+
+      - name: Show provisioned resources
+        if: always()
+        run: |
+          kubectl get sandboxtemplates,sandboxwarmpools,sandboxclaims -n agent-sandbox-demo

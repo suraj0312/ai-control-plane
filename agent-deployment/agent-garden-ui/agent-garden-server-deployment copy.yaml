@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: agui-server-data
+  namespace: agent-garden
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: agui-server
+  namespace: agent-garden
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: agui-server
+
+  template:
+    metadata:
+      labels:
+        app: agui-server
+
+    spec:
+
+      containers:
+
+      - name: agui-server
+
+        image: docker.io/su03raj/agui-server:v8
+
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - containerPort: 8000
+
+        env:
+        - name: ENABLE_AUTHENTICATION
+          value: "false"
+        
+        - name: SANDBOX_ROUTER_URL
+          value: "http://sandbox-router-svc.agent-sandbox-system.svc.cluster.local:8080"
+        
+        - name: OPENAI_MODEL_NAME
+          valueFrom:
+            secretKeyRef:
+              name: openai-secret
+              key: OPENAI_MODEL_NAME
+
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secret
+              key: OPENAI_API_KEY
+
+        volumeMounts:
+
+        - name: server-data
+
+          mountPath: /app/data
+
+      volumes:
+
+      - name: server-data
+
+        persistentVolumeClaim:
+          claimName: agui-server-data
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: agui-server
+  namespace: agent-garden
+
+spec:
+  selector:
+    app: agui-server
+
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+
+  type: ClusterIP

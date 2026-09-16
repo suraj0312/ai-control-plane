@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-claim-reader
+  namespace: agent-sandbox-demo
+rules:
+- apiGroups: ["extensions.agents.x-k8s.io"]
+  resources: ["sandboxclaims","sandboxwarmpools","sandboxtemplates"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["agents.x-k8s.io"]                                      # Add this new group
+  resources: ["sandboxes"]                                            # Add this new resource
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"] # Allow reading and resolving it
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agui-apps-sandbox-binding
+  namespace: agent-sandbox-demo
+subjects:
+- kind: ServiceAccount
+  name: default
+  # namespace: agent-sandbox-demo
+  namespace: agent-sandbox-system
+roleRef:
+  kind: Role
+  name: sandbox-claim-reader
+  apiGroup: rbac.authorization.k8s.io
+ 

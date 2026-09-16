@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: agui-client
+  # namespace: agent-sandbox-demo
+  namespace: agent-garden
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: agui-client
+
+  template:
+    metadata:
+      labels:
+        app: agui-client
+    spec:
+      containers:
+        - name: agui-client
+
+          # image: localhost/agent-garden-client:v6
+          image: docker.io/su03raj/agui-client:v14
+
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 3000
+
+          env:
+            - name: HOSTNAME
+              value: "0.0.0.0"
+
+            - name: PORT
+              value: "3000"
+
+            - name: ENABLE_AUTHENTICATION
+              value: "false"
+
+            - name: BACKEND_URL
+              value: "http://agui-server:8000"
+
+            - name: NEXT_PUBLIC_BACKEND_URL
+              value: "http://localhost:8000"
+            
+            - name: SANDBOX_ROUTER_URL
+              value: "http://sandbox-router-svc.agent-sandbox-system.svc.cluster.local:8080"
+
+            - name: SANDBOX_API_SERVER
+              value: "http://sandbox-api.agent-sandbox-system.svc.cluster.local:9000"
+
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: agui-client
+  # namespace: agent-sandbox-demo
+  namespace: agent-garden
+
+spec:
+
+  selector:
+    app: agui-client
+
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+
+  type: NodePort

@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: sandbox-api-data
+  namespace: agent-sandbox-system
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: sandbox-api
+  namespace: agent-sandbox-system
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: sandbox-api
+
+  template:
+    metadata:
+      labels:
+        app: sandbox-api
+
+    spec:
+
+      containers:
+
+      - name: sandbox-api
+
+        image: su03raj/sandbox-apis:latest
+
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - containerPort: 9000
+
+        volumeMounts:
+
+        - name: sandbox-api-data
+
+          mountPath: /app/data
+
+      volumes:
+
+      - name: sandbox-api-data
+
+        persistentVolumeClaim:
+          claimName: sandbox-api-data
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: sandbox-api
+  namespace: agent-sandbox-system
+
+spec:
+  selector:
+    app: sandbox-api
+
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000
+
+  type: ClusterIP
