@@ -31,18 +31,12 @@ jobs:
       # =================================================================
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Create local KinD Cluster
+        run: |
+          # Natively triggers the pre-installed kind binary on the runner
+          kind create cluster --wait 5m
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Configure Kubectl
-        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
-
-      # =================================================================
+     ===================================================
       # STAGE 2: Apply Manifests
       # =================================================================
       - name: Apply namespace
