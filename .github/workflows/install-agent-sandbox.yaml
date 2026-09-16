@@ -37,16 +37,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Create local KinD Cluster
+        uses: engineerd/setup-kind@v0.6.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          version: "v0.12.0" # Spins up a free K8s cluster inside the runner
 
-      - name: Configure Kubectl
-        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
-
+      - name: Test Cluster Access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
       # =================================================================
       # STAGE 2: Deploy  Sandbox Control Plane
       # =================================================================
