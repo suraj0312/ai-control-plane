@@ -20,6 +20,7 @@ on:
       - "agent-deployment/agent-sandbox/helm/**"
       - "agent-deployment/agent-sandbox/sandbox/**"
       - ".github/workflows/install-agent-sandbox.yml"
+      - ".github/workflows/deploy-agent-garden.yml"
 
 permissions:
   contents: read
