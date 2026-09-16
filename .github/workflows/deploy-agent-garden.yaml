@@ -36,7 +36,7 @@ jobs:
           # Natively triggers the pre-installed kind binary on the runner
           kind create cluster --wait 5m
 
-     ===================================================
+     #===================================================
       # STAGE 2: Apply Manifests
       # =================================================================
       - name: Apply namespace
