@@ -25,8 +25,6 @@ jobs:
   deploy-agent-garden:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    env:
-      KUBECONFIG: ${{ github.workspace }}/.kube/config
     steps:
       # =================================================================
       # STAGE 1: Checkout & Cluster Access
@@ -34,6 +32,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Create local KinD Cluster
+        env:
+          KUBECONFIG: ${{ github.workspace }}/.kube/config
         run: |
           # Natively triggers the pre-installed kind binary on the runner
           kind create cluster --wait 5m
