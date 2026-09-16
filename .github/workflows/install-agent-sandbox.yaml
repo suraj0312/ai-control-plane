@@ -20,7 +20,6 @@ on:
       - "agent-deployment/agent-sandbox/helm/**"
       - "agent-deployment/agent-sandbox/sandbox/**"
       - ".github/workflows/install-agent-sandbox.yml"
-      - ".github/workflows/deploy-agent-garden.yml"
 
 permissions:
   contents: read
@@ -37,11 +36,21 @@ jobs:
       # =================================================================
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Create local KinD Cluster
         run: |
           # Natively triggers the pre-installed kind binary on the runner
           kind create cluster --wait 5m
+
+      # - name: Configure AWS Credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: ${{ secrets.AWS_REGION }}
+
+      # - name: Configure Kubectl
+      #   run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
       # =================================================================
       # STAGE 2: Deploy  Sandbox Control Plane
       # =================================================================
@@ -54,13 +63,44 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # kubectl apply -f "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.2/sandbox-with-extensions.yaml"
+      #- name: Install agent-sandbox (core + extensions)
+      #  run: |
+      #    kubectl apply -f agent-deployment/agent-sandbox/sandbox/sandbox-with-extensions.yaml
+      #    kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/agent-sandbox-controller --timeout=300s
+      #  env:
+      #    VERSION: ${{ steps.resolve-version.outputs.version }}
+      - name: Remove legacy (non-Helm) agent-sandbox controller resources
+        run: |
+          kubectl delete deployment agent-sandbox-controller -n "$AGENT_SANDBOX_NAMESPACE" --ignore-not-found
+          kubectl delete service agent-sandbox-controller -n "$AGENT_SANDBOX_NAMESPACE" --ignore-not-found
+          kubectl delete serviceaccount agent-sandbox-controller -n "$AGENT_SANDBOX_NAMESPACE" --ignore-not-found
+          kubectl delete clusterrolebinding agent-sandbox-controller agent-sandbox-controller-extensions --ignore-not-found
+          kubectl delete clusterrole agent-sandbox-controller agent-sandbox-controller-extensions --ignore-not-found
+      
+      - name: Apply/update agent-sandbox CRDs
+        run: |
+          kubectl apply -f agent-deployment/agent-sandbox/helm-sandbox/crds/
+      
+      - name: Ensure namespace exists and is Helm-owned
+        run: |
+          kubectl create namespace "$AGENT_SANDBOX_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl label namespace "$AGENT_SANDBOX_NAMESPACE" app.kubernetes.io/managed-by=Helm --overwrite
+          kubectl annotate namespace "$AGENT_SANDBOX_NAMESPACE" \
+            meta.helm.sh/release-name=agent-sandbox \
+            meta.helm.sh/release-namespace="$AGENT_SANDBOX_NAMESPACE" \
+            --overwrite
+      
       - name: Install agent-sandbox (core + extensions)
         run: |
-          kubectl apply -f "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${VERSION}/sandbox-with-extensions.yaml"
-          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/agent-sandbox-controller --timeout=180s
-        env:
-          VERSION: ${{ steps.resolve-version.outputs.version }}
-
+          helm upgrade --install agent-sandbox \
+            agent-deployment/agent-sandbox/helm-sandbox \
+            --namespace "$AGENT_SANDBOX_NAMESPACE" \
+            --create-namespace \
+            --set image.tag="${{ steps.resolve-version.outputs.version }}" \
+            --set controller.extensions=true
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/agent-sandbox-controller --timeout=300s
+      
       - name: Verify installation
         run: |
           kubectl get crd sandboxes.agents.x-k8s.io
@@ -73,8 +113,8 @@ jobs:
         run: |
           kubectl apply -f agent-deployment/agent-sandbox/sandbox/router-deployment.yaml
           kubectl apply -f agent-deployment/agent-sandbox/sandbox/apis-deployment.yaml
-          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/sandbox-router-deployment --timeout=180s
-          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/sandbox-api --timeout=180s
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/sandbox-router-deployment --timeout=300s
+          kubectl -n "$AGENT_SANDBOX_NAMESPACE" rollout status deployment/sandbox-api --timeout=300s
 
       # =================================================================
       # STAGE 3: Validate Helm Chart
@@ -82,7 +122,7 @@ jobs:
       - name: Lint and template this repo's Helm chart
         run: |
           helm lint agent-deployment/agent-sandbox/helm/agent-sandbox
-          helm template test-agent agent-deployment/agent-sandbox/helm/agent-sandbox --set name=test-agent --set image.repository=busybox --set image.tag=latest
+          helm template travel-agent agent-deployment/agent-sandbox/helm/agent-sandbox
 
       # =================================================================
       # STAGE 4: Install Chart Against Cluster
@@ -90,7 +130,7 @@ jobs:
       - name: Install this repo's Helm chart against the cluster
         run: |
           kubectl create namespace agent-sandbox-demo --dry-run=client -o yaml | kubectl apply -f -
-          helm upgrade --install test-agent agent-deployment/agent-sandbox/helm/agent-sandbox
+          helm upgrade --install travel-agent agent-deployment/agent-sandbox/helm/agent-sandbox
 
       - name: Show provisioned resources
         if: always()
