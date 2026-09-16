@@ -31,47 +31,57 @@ jobs:
       # =================================================================
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create local KinD Cluster
-        env:
-          KUBECONFIG: ${{ github.workspace }}/.kube/config
-        run: |
-          # Natively triggers the pre-installed kind binary on the runner
-          kind create cluster --wait 5m
 
-     #===================================================
+      - name: Create local KinD cluster
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig
+        run: |
+           kind create cluster --wait 5m --kubeconfig "$KUBECONFIG"
+
+      # - name: Configure AWS Credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: ${{ secrets.AWS_REGION }}
+
+      # - name: Configure Kubectl
+      #   run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+      # =================================================================
       # STAGE 2: Apply Manifests
       # =================================================================
       - name: Apply namespace
-        run: kubectl apply -f agent-deployment/agent-garden-ui/namespace.yaml
+        run: kubectl --kubeconfig "$KUBECONFIG" apply -f agent-deployment/agent-garden-ui/namespace.yaml
 
       - name: Create openai-secret
         run: |
-          kubectl create secret generic openai-secret \
+          kubectl --kubeconfig "$KUBECONFIG" create secret generic openai-secret \
             --namespace "$AGENT_GARDEN_NAMESPACE" \
             --from-literal=OPENAI_MODEL_NAME="${{ secrets.OPENAI_MODEL_NAME }}" \
             --from-literal=OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+            --dry-run=client -o yaml | kubectl --kubeconfig "$KUBECONFIG" apply -f -
 
 
       - name: Apply RBAC
-        run: kubectl apply -f agent-deployment/agent-garden-ui/agent-garden-role-binding.yaml
+        run: kubectl --kubeconfig "$KUBECONFIG" apply -f agent-deployment/agent-garden-ui/agent-garden-role-binding.yaml
 
       - name: Apply server deployment
-        run: kubectl apply -f agent-deployment/agent-garden-ui/agent-garden-server-deployment.yaml
+        run: kubectl --kubeconfig "$KUBECONFIG" apply -f agent-deployment/agent-garden-ui/agent-garden-server-deployment.yaml
 
       - name: Apply client deployment
-        run: kubectl apply -f agent-deployment/agent-garden-ui/agent-garden-client-deployment.yaml
+        run: kubectl --kubeconfig "$KUBECONFIG" apply -f agent-deployment/agent-garden-ui/agent-garden-client-deployment.yaml
 
       # =================================================================
       # STAGE 3: Verify Rollout
       # =================================================================
       - name: Wait for rollout
         run: |
-          kubectl -n "$AGENT_GARDEN_NAMESPACE" rollout status deployment/agui-server --timeout=180s
-          kubectl -n "$AGENT_GARDEN_NAMESPACE" rollout status deployment/agui-client --timeout=180s
+          kubectl --kubeconfig "$KUBECONFIG" -n "$AGENT_GARDEN_NAMESPACE" rollout status deployment/agui-server --timeout=180s
+          kubectl --kubeconfig "$KUBECONFIG" -n "$AGENT_GARDEN_NAMESPACE" rollout status deployment/agui-client --timeout=180s
 
       - name: Show provisioned resources
         if: always()
         run: |
-          kubectl get all -n "$AGENT_GARDEN_NAMESPACE"
+          kubectl --kubeconfig "$KUBECONFIG" get all -n "$AGENT_GARDEN_NAMESPACE"
  
